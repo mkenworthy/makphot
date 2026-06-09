@@ -4,71 +4,23 @@ from astropy.io import ascii
 from astropy.table import unique,vstack,Table,Column
 import paths
 import re 
+import sys
 
-from makphot import *
+#from makphot import *
 
-fin='PDS-110/light_curve_2d21a3e6-64f2-4ccf-82b7-50a63579b52b.csv'
-ta = ascii.read(paths.static/fin,format='csv',guess=False,
-	converters={
-	'HJD': float,
-	'Camera': str,
-	'FWHM': float,
-	'Limit': float,
-	'mag': str,
-	'mag_err': float,
-	'flux(mJy)': float,
-	'flux_err': float,
-	'Filter': str})
+fin='PDS-110_asassn_clean.ecsv'
 
-# mag is str initially because it can have ">1234.234" as an upper limit
-# we remove these in the goodmag expression below, copy the table and reassign the dtype to make it float
-
-#      HJD           UT Date       Camera FWHM Limit   mag   mag_err flux(mJy) flux_err Filter
-# ------------- ------------------ ------ ---- ------ ------ ------- --------- -------- ------
-# 2457420.65322 2016-02-02.1500246     be 1.46 17.458  13.45   0.005    15.995     0.08      V
-# bad values are labelled 99.99 in mag,mag_err, flux,flux_err
-#print(ta.info)
-print(f'table {fin} read in with {len(ta)} lines')
-
-goodmag = [False if re.match('>',l) else True for l in ta['mag']]
-print(f'{np.sum(goodmag)} lines with good magnitude values')
-
-t = ta[goodmag]
-t['mag'] = Column(t['mag'],dtype=float)
+t = ascii.read(fin)
+print(t.info)
 
 
-mbad = t['mag']>99
-
-print(f'{np.sum(mbad)} lines with bad (>99) magnitude values')
-
-t=t[~mbad]
-
-print(f'{len(t)} lines remaining')
-
-t['MJD'] = t['HJD']-2400000.5
-obj='PDS 110'
-
-fig, (ax) = plt.subplots(1,1,figsize=(12,6))
-ax.errorbar(t['MJD'],t['flux(mJy)'],yerr=t['flux_err'],fmt='.')
-ax.set_ylabel('Flux [mJy]')
-ax.set_xlabel('Epoch [MJD]')
-ax.set_title('data from {}'.format(fin))
-#plt.show()
-
-
-# split by filter, if there's more than one filter
-
-t_unique = unique(t,keys='Filter')
-
-for filt in t_unique['Filter']:
-	print(f'working on filter {filt}')
-
-
-
-
-
+# get a list of the unique bandpasses
+t_by_filter = t.group_by('Filter')
+print('all observed photometric bands:')
+print(t_by_filter.groups.keys)
 
 quit()
+
 flux_high = 75
 # reject noisy points
 t = t[(t['flux(mJy)']<flux_high)]
@@ -246,7 +198,7 @@ tming, tmaxg = 58150,58450
     mean_rms_region(tc_bing[mg], fc_bing[mg], binned_g_err[mg], tming, tmaxg)
 
 #print(f'Flux V band normalised {V_flux_norm:5.2}\pm{V_flux_norm_err:5.2f}')
-print(f'Flux g band normalised {g_flux_norm:5.2}\pm{g_flux_norm_err:5.2f}')
+print(f'Flux g band normalised {g_flux_norm:5.2}\\pm{g_flux_norm_err:5.2f}')
 
 #tVout = Table([tc_binV[mV],fc_binV[mV]/V_flux_norm,
 #    binned_V_err[mV]/V_flux_norm],
