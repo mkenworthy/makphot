@@ -1,7 +1,14 @@
-channels:
-  - conda-forge
 dependencies:
-  - numpy=2.2.6
-  - pip=25.1.1
-  - python=3.10
-  - matplotlib==3.10
+  - conda-forge::numpy
+  - conda-forge::pip
+  - conda-forge::python=3.11
+  - conda-forge::pandas
+  - conda-forge::astropy
+  - conda-forge::scipy
+  - conda-forge::tqdm
+  - pip:
+      - matplotlib
+      - graphviz
+      - emcee
+      - corner
+      - specutils
