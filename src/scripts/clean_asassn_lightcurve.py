@@ -1,4 +1,4 @@
-interact=0
+interact=1
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import ascii
@@ -10,6 +10,10 @@ groupnight=1
 
 fin='PDS-110/light_curve_2d21a3e6-64f2-4ccf-82b7-50a63579b52b.csv'
 fout = 'PDS-110_asassn_clean.ecsv'
+fin='ASASSN-25db/light_curve_ebe69e45-6dff-4822-b6d9-e78f9a3f186d.csv'
+fout = 'ASASSN-25db_asassn_clean.ecsv'
+fin='ASASSN-25bv/light_curve_ee7337f1-5ced-490f-9f34-87f4b577c426.csv'
+fout = 'ASASSN-25bv_asassn_clean.ecsv'
 mindelt = 0.015 # days minimum between photometric epochs to call it a distinct separate observation
 
 # read in the ASASSN light curve exported as CSV from the web interface
@@ -64,11 +68,19 @@ if interact:
 
 t_unique = unique(t,keys='Filter')
 
-fig, axes = plt.subplots(1,len(t_unique),figsize=(12,6))
-ax=np.ndarray.flatten(axes)
+if len(t_unique) > 1:
+	fig, axes = plt.subplots(1,len(t_unique),figsize=(12,6))
+	ax=np.ndarray.flatten(axes)
+else:
+	fig, axes = plt.subplots(1,1,figsize=(12,6))
+	axes = np.array([axes])
 
-fig2, axes2 = plt.subplots(1,len(t_unique),figsize=(12,6))
-ax2=np.ndarray.flatten(axes2)
+if len(t_unique) > 1:
+	fig2, axes2 = plt.subplots(1,len(t_unique),figsize=(12,6))
+	ax2=np.ndarray.flatten(axes2)
+else:
+	fig2, axes2 = plt.subplots(1,1,figsize=(12,6))
+	axes2 = np.array([axes2])
 
 # make a blank copy of the input table
 tout = Table(t,copy=True)
@@ -175,8 +187,13 @@ for (filt,ax,ax2) in zip(t_unique['Filter'],axes,axes2):
 
 
 if interact:
-	fig3, axes3 = plt.subplots(len(t_unique),1,figsize=(12,6))
-	ax3=np.ndarray.flatten(axes3)
+
+	if len(t_unique) > 1:
+		fig3, axes3 = plt.subplots(1,len(t_unique),figsize=(12,6))
+		ax3=np.ndarray.flatten(axes3)
+	else:
+		fig3, axes3 = plt.subplots(1,1,figsize=(12,6))
+		axes3 = np.array([axes3])
 
 	# split by filters, if there's more than one
 	for (filt,ax3) in zip(t_unique['Filter'],axes3):
