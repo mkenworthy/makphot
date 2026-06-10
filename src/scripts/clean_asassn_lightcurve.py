@@ -1,11 +1,9 @@
-interact=0
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import ascii
 from astropy.table import unique,vstack,Table,Column
 import paths
 import re 
-groupnight=1
 import sys
 import os
 import sys
@@ -17,33 +15,38 @@ parser = argparse.ArgumentParser(
                     epilog='Use -d to see the intermediate plots and analysis',
                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("-o", "--outdir", help="Directory to write output file",default='.')
+parser.add_argument("-s", "--sigcleanclip", help="Reject this multiple of flux sig_err",type=float,default=3.0)
 parser.add_argument("-n", "--name", help="name of the object",default="TEST")
 parser.add_argument("input",help="Lightcurve file")
 parser.add_argument("-d","--display", help="plot lightcurves",
                     action="store_true",default=False)
+parser.add_argument("-e","--errsigclean", help="clip out cleaned points with large errors",
+                    action="store_true",default=True)
 args = parser.parse_args()
 
+if args.errsigclean:
+	print(f'# errsigclean is ON with {args.sigcleanclip}')
 if args.display:
-	print("Plotting ON")
+	print("# Plotting ON")
 	interact=1
 
 if args.outdir:
-    print("Output directory:", args.outdir)
+    print("# Output directory:", args.outdir)
 
 fin = args.input
-print(f'Input file is {fin}')
+print(f'# Input file is {fin}')
 
 
 if os.access(args.outdir, os.W_OK):
-	print(f'{args.outdir} is writeable')
+	print(f'# {args.outdir} is writeable')
 else:
-	print(f'{args.outdir} is NOT writeable. Stopping.')
+	print(f'# {args.outdir} is NOT writeable. Stopping.')
 	quit()
 
 filename_suffix='ecsv'
 fout = os.path.join(args.outdir, args.name + '_ASASSN_clean.' + filename_suffix)
 
-print(f'Output file is {fout}')
+print(f'# Output file is {fout}')
 
 mindelt = 0.015 # days minimum between photometric epochs to call it a distinct separate observation
 
@@ -182,16 +185,16 @@ for (filt,ax,ax2) in zip(t_unique['Filter'],axes,axes2):
 			ax.set_title(f'data from filter {filt}')
 
 
-		if groupnight: # make averages over clusters of data points
-			is_sorted = lambda a: np.all(a[:-1] <= a[1:])
-			# first check and sort table by increasing HJD
+#		if groupnight: # make averages over clusters of data points
+		is_sorted = lambda a: np.all(a[:-1] <= a[1:])
+		# first check and sort table by increasing HJD
 #			print(is_sorted(tfc['MJD']))
-			deltat = np.diff(tfc['MJD'])
-			if interact:
-				ax2.hist(deltat,bins=201,range=(0,1),log=True, label=cam)
-				ax2.set_ylabel('N')
-				ax2.set_xlabel('delta time [days]')
-				ax2.set_title(f'data from filter {filt}')
+		deltat = np.diff(tfc['MJD'])
+		if interact:
+			ax2.hist(deltat,bins=201,range=(0,1),log=True, label=cam)
+			ax2.set_ylabel('N')
+			ax2.set_xlabel('delta time [days]')
+			ax2.set_title(f'data from filter {filt}')
 
 
 			k = (deltat>mindelt) # True for large delta times
@@ -219,11 +222,30 @@ for (filt,ax,ax2) in zip(t_unique['Filter'],axes,axes2):
 		ax.legend()
 		ax2.legend()
 
+if args.errsigclean:
+	print('# removing points with large errors compared to median')
+
+	tnew = Table()
+
+	# get a list of the unique bandpasses
+	t_by_filter = tout.group_by('Filter')
+
+	for filters, tf in zip(t_by_filter.groups.keys, t_by_filter.groups):
+		filt = filters['Filter']
+
+		median_sig = np.median(tf['flux_err'])
+		msm = (tf['flux_err'] < args.sigcleanclip*median_sig)
+
+		print(f'# median error in {filt} flux errors is {median_sig:5.3f} with {np.sum(~msm)} points of {len(tf)} rejected')
+
+		tnew = vstack([tnew,tf[msm]])
+
+	tout = tnew
 
 if interact:
 
 	if len(t_unique) > 1:
-		fig3, axes3 = plt.subplots(1,len(t_unique),figsize=(12,6))
+		fig3, axes3 = plt.subplots(len(t_unique),1,figsize=(12,6))
 		ax3=np.ndarray.flatten(axes3)
 	else:
 		fig3, axes3 = plt.subplots(1,1,figsize=(12,6))

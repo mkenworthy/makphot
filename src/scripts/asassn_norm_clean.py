@@ -4,11 +4,30 @@ from astropy.io import ascii
 from astropy.table import unique,vstack,Table,Column
 import paths
 import re 
-import sys
 from makphot import *
 
-fin='PDS-110_asassn_clean.ecsv'
-sig_percentile = 90 # integer percentage to keep all errors under this value
+import os
+import sys
+import argparse
+
+parser = argparse.ArgumentParser(                    
+	prog='asassn_norm_clean',
+                    description='takes cleaned ASASSN light curve and adds columns for normalised and cleaned photometry',
+                    epilog='Use -d to see the intermediate plots and analysis',
+                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+#parser.add_argument("-n", "--name", help="name of the object",default="TEST")
+parser.add_argument("input",help="Cleaned ASASSN lightcurve file")
+parser.add_argument("-d","--display", help="plot lightcurves",
+                    action="store_true",default=True)
+args = parser.parse_args()
+
+fin = args.input
+print(f'# Input file is {fin}')
+
+if args.display:
+	print("# Plotting ON")
+	interact=1
+
 t = ascii.read(fin)
 print(t.info)
 
@@ -26,7 +45,10 @@ for filters, tf in zip(t_by_filter.groups.keys, t_by_filter.groups):
 
 print(t_by_filter)
 
+if interact:
+	plt.show()
 
+quit()
 
 
 fig, axes = plt.subplots(len(t_by_filter.groups.keys),3,figsize=(12,6))
