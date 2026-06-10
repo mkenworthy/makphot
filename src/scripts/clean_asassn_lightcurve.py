@@ -1,33 +1,67 @@
-interact=1
+interact=0
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import ascii
 from astropy.table import unique,vstack,Table,Column
 import paths
 import re 
-import sys
 groupnight=1
+import sys
+import os
+import sys
+import argparse
 
-fin='PDS-110/light_curve_2d21a3e6-64f2-4ccf-82b7-50a63579b52b.csv'
-fout = 'PDS-110_asassn_clean.ecsv'
-fin='ASASSN-25db/light_curve_ebe69e45-6dff-4822-b6d9-e78f9a3f186d.csv'
-fout = 'ASASSN-25db_asassn_clean.ecsv'
-fin='ASASSN-25bv/light_curve_ee7337f1-5ced-490f-9f34-87f4b577c426.csv'
-fout = 'ASASSN-25bv_asassn_clean.ecsv'
+parser = argparse.ArgumentParser(                    
+	prog='clean_asassn_lightcurve',
+                    description='Takes raw downloaded ASASSN lightcurves and cleans the photometry',
+                    epilog='Use -d to see the intermediate plots and analysis',
+                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("-o", "--outdir", help="Directory to write output file",default='.')
+parser.add_argument("-n", "--name", help="name of the object",default="TEST")
+parser.add_argument("input",help="Lightcurve file")
+parser.add_argument("-d","--display", help="plot lightcurves",
+                    action="store_true",default=False)
+args = parser.parse_args()
+
+if args.display:
+	print("Plotting ON")
+	interact=1
+
+if args.outdir:
+    print("Output directory:", args.outdir)
+
+fin = args.input
+print(f'Input file is {fin}')
+
+
+if os.access(args.outdir, os.W_OK):
+	print(f'{args.outdir} is writeable')
+else:
+	print(f'{args.outdir} is NOT writeable. Stopping.')
+	quit()
+
+filename_suffix='ecsv'
+fout = os.path.join(args.outdir, args.name + '_ASASSN_clean.' + filename_suffix)
+
+print(f'Output file is {fout}')
+
 mindelt = 0.015 # days minimum between photometric epochs to call it a distinct separate observation
 
 # read in the ASASSN light curve exported as CSV from the web interface
-ta = ascii.read(paths.static/fin,format='csv',guess=False,
-	converters={
-	'HJD': float,
-	'Camera': str,
-	'FWHM': float,
-	'Limit': float,
-	'mag': str,
-	'mag_err': float,
-	'flux(mJy)': float,
-	'flux_err': float,
-	'Filter': str})
+try:
+	ta = ascii.read(fin,format='csv',guess=False,
+		converters={
+		'HJD': float,
+		'Camera': str,
+		'FWHM': float,
+		'Limit': float,
+		'mag': str,
+		'mag_err': float,
+		'flux(mJy)': float,
+		'flux_err': float,
+		'Filter': str})
+except FileNotFoundError:
+    print(f"Error: The file {fin} does not exist.")
 
 ta.remove_column('UT Date')
 ta.add_column(1,name='npoints') 
@@ -197,10 +231,10 @@ if interact:
 
 	# split by filters, if there's more than one
 	for (filt,ax3) in zip(t_unique['Filter'],axes3):
-		print(f'working on filter {filt}')
+		print(f'# working on filter {filt}')
 		mfilt = (tout['Filter']==filt)
 		tfilt = tout[mfilt] 
-		print(f'with {len(tfilt)} rows')
+		print(f'# with {len(tfilt)} rows')
 
 		# additionally split by ASASSN camera name:
 		tcamera_unique = unique(tfilt,keys='Camera')
@@ -213,8 +247,9 @@ if interact:
 if interact:
 	plt.show()
 
-# this convoluted way of writing out an ECSV table is because the ecsv writer in astropy does not respect the .format values in the Table object, but plain ascii does...
-# so I write out a plain ascii table with the correct formatting, read that in, and write out the ECSV table.
+# this convoluted way of writing out an ECSV table is because the ecsv writer in astropy 
+# does not respect the .format values in the Table object, but plain ascii does...
+# I write out a plain ascii table with the correct formatting, read that in, and write that out as an ECSV table.
 
 tout['HJD'].format = '%14.6f'
 tout['FWHM'].format = '%4.2f'
