@@ -63,6 +63,8 @@ new_style = re.match('# ASAS-SN',first_line)
 
 if first_line:
 	print(f'# csv file is NEW style')
+	print(f'# this is for the OLD style CSV ASASSN files. Use the new interface and the new CSV reader')
+	quit()
 	# read in the ASASSN light curve exported as CSV from the web interface
 	try:
 		ta = ascii.read(fin,format='csv',guess=False,header_start=4,data_start=5,
@@ -77,45 +79,63 @@ if first_line:
 			'Filter': str,
 			'Quality':str,	
 			'Camera': str})
-# if Mag Error = 99.9990 it's a bad data point
 
 	except FileNotFoundError:
 	    print(f"Error: The file {fin} does not exist.")
 else:
 	print(f'# OLD style csv')
-	print(f'# not going further - use the OLD style reader for this')
-	quit()
+	# read in the ASASSN light curve exported as CSV from the web interface
+	try:
+		ta = ascii.read(fin,format='csv',guess=False,
+			converters={
+			'HJD': float,
+			'Camera': str,
+			'FWHM': float,
+			'Limit': float,
+			'mag': str,
+			'mag_err': float,
+			'flux(mJy)': float,
+			'flux_err': float,
+			'Filter': str})
+		ta.remove_column('UT Date')
+	except FileNotFoundError:
+	    print(f"Error: The file {fin} does not exist.")
+
+# if Mag Error = 99.9990 it's a bad data point
 print(ta.info)
+quit()
 
 ta.add_column(1,name='npoints') 
 
-# NEW format:
+# 'mag' is read in as a str initially because it can have ">1234.234" representing as an upper limit
+# we remove these in the goodmag expression below, copy the table and reassign the dtype to make it float
 
-# # ASAS-SN SkyPatrol ID: 661430394199
-# # Chandra Source Catalog: 2CXO J063148.8+045609
-# # Million Optical/Radio/X-Ray Associations (MORX) Catalog: MORX J063148.8+045609
-#
-#
-# JD,Flux,Flux Error,Mag,Mag Error,Limit,FWHM,Filter,Quality,Camera
-# 2457008.0744402,1.4261,0.0562,16.0744,0.0429,17.8372,1.60,V,G,bd
-# 2457009.0688918,1.6081,0.0889,15.9440,0.0601,17.3397,1.58,V,G,bd
-# 2457009.8024914,1.5302,0.0323,15.9979,0.0230,18.4384,1.53,V,G,bd
+#      HJD           UT Date       Camera FWHM Limit   mag   mag_err flux(mJy) flux_err Filter
+# ------------- ------------------ ------ ---- ------ ------ ------- --------- -------- ------
+# 2457420.65322 2016-02-02.1500246     be 1.46 17.458  13.45   0.005    15.995     0.08      V
+# bad values are labelled 99.99 in mag,mag_err, flux,flux_err
 
 print(f'# table {fin} read in with {len(ta)} lines')
 
-mbad = ta['Mag Error']>99
+goodmag = [False if re.match('>',l) else True for l in ta['mag']]
+print(f'# {np.sum(goodmag)} lines with good magnitude values')
+
+t = ta[goodmag]
+t['mag'] = Column(t['mag'],dtype=float)
+
+mbad = t['mag']>99
 
 print(f'# {np.sum(mbad)} lines with bad (>99) magnitude values')
 
-t=ta[~mbad]
+t=t[~mbad]
 
 print(f'# {len(t)} lines remaining')
 
-t['MJD'] = t['JD']-2400000.5
+t['MJD'] = t['HJD']-2400000.5
 
 if interact:
 	fig, (ax) = plt.subplots(1,1,figsize=(12,6))
-	ax.errorbar(t['MJD'],t['Flux'],yerr=t['Flux Error'],fmt='.')
+	ax.errorbar(t['MJD'],t['flux(mJy)'],yerr=t['flux_err'],fmt='.')
 	ax.set_ylabel('Flux [mJy]')
 	ax.set_xlabel('Epoch [MJD]')
 	ax.set_title('data from {}'.format(fin))
@@ -146,11 +166,11 @@ def mean_cluster(t):
 	to = Table(t,copy=True)
 	to.remove_rows(np.arange(len(to)-1)) # remove all but one row
 	to['MJD'][0] = np.mean(t['MJD'])
-	to['JD'][0] = np.mean(t['JD'])
+	to['HJD'][0] = np.mean(t['HJD'])
 	to['FWHM'][0] = np.mean(t['FWHM'])
 
-	to['Mag'][0] = np.mean(t['Mag'])
-	to['Flux'][0] = np.mean(t['Flux'])
+	to['mag'][0] = np.mean(t['mag'])
+	to['flux(mJy)'][0] = np.mean(t['flux(mJy)'])
 
 	# def ms(f,e): # testing with Lyons 1991 data analysis for physical science studentse
 	# 	e2 = e*e 
@@ -164,21 +184,21 @@ def mean_cluster(t):
 	# The error bar is the larger of either (i) the STD of the two or three points or (ii) the mean of the ASASSN quoted errors. 
 	# This is to avoid anomalously low error bars if the two points happen to be very close to each other in value but have very large reported error bars.
 
-	mag_err_std = np.std(t['Mag'])
-	mag_err_asas = np.mean(t['Mag Error'])
+	mag_err_std = np.std(t['mag'])
+	mag_err_asas = np.mean(t['mag_err'])
 
 	if mag_err_std > mag_err_asas:
-		to['Mag Error'][0] = mag_err_std
+		to['mag_err'][0] = mag_err_std
 	else:
-		to['Mag Error'][0] = mag_err_asas
+		to['mag_err'][0] = mag_err_asas
 
-	flux_err_std = np.std(t['Flux'])
-	flux_err_asas = np.mean(t['Flux Error'])
+	flux_err_std = np.std(t['flux(mJy)'])
+	flux_err_asas = np.mean(t['flux_err'])
 
 	if flux_err_std > flux_err_asas:
-		to['Flux Error'][0] = flux_err_std
+		to['flux_err'][0] = flux_err_std
 	else:
-		to['Flux Error'][0] = flux_err_asas
+		to['flux_err'][0] = flux_err_asas
 
 	return to
 
@@ -197,7 +217,7 @@ for (filt,ax,ax2) in zip(t_unique['Filter'],axes,axes2):
 		tfc = tfilt[mcamera]
 
 		if interact:
-			ax.errorbar(tfc['MJD'],tfc['Flux'],yerr=tfc['Flux Error'],fmt='.',label=cam)
+			ax.errorbar(tfc['MJD'],tfc['flux(mJy)'],yerr=tfc['flux_err'],fmt='.',label=cam)
 			ax.set_ylabel('Flux [mJy]')
 			ax.set_xlabel('Epoch [MJD]')
 			ax.set_title(f'data from filter {filt}')
@@ -236,7 +256,7 @@ for (filt,ax,ax2) in zip(t_unique['Filter'],axes,axes2):
 					tout.add_row(t_cluster[0])
 
 	if interact:
-		ax.errorbar(tout['MJD'],tout['Flux'],yerr=tout['Flux Error'],color='orange',fmt='s',alpha=0.5,elinewidth=5)
+		ax.errorbar(tout['MJD'],tout['flux(mJy)'],yerr=tout['flux_err'],color='orange',fmt='s',alpha=0.5,elinewidth=5)
 		ax.legend()
 		ax2.legend()
 
@@ -251,8 +271,8 @@ if args.errsigclean:
 	for filters, tf in zip(t_by_filter.groups.keys, t_by_filter.groups):
 		filt = filters['Filter']
 
-		median_sig = np.median(tf['Flux Error'])
-		msm = (tf['Flux Error'] < args.sigcleanclip*median_sig)
+		median_sig = np.median(tf['flux_err'])
+		msm = (tf['flux_err'] < args.sigcleanclip*median_sig)
 
 		print(f'# median error in {filt} flux errors is {median_sig:5.3f} with {np.sum(~msm)} points of {len(tf)} rejected')
 
@@ -279,7 +299,7 @@ if interact:
 		# additionally split by ASASSN camera name:
 		tcamera_unique = unique(tfilt,keys='Camera')
 
-		ax3.errorbar(tfilt['MJD'],tfilt['Flux'],yerr=tfilt['Flux Error'],fmt='.')
+		ax3.errorbar(tfilt['MJD'],tfilt['flux(mJy)'],yerr=tfilt['flux_err'],fmt='.')
 		ax3.set_ylabel('Flux [mJy]')
 		ax3.set_xlabel('Epoch [MJD]')
 		ax3.set_title(f'data from filter {filt}')
@@ -291,28 +311,28 @@ if interact:
 # does not respect the .format values in the Table object, but plain ascii does...
 # I write out a plain ascii table with the correct formatting, read that in, and write that out as an ECSV table.
 
-tout['JD'].format = '%14.6f'
+tout['HJD'].format = '%14.6f'
 tout['FWHM'].format = '%4.2f'
 tout['Limit'].format = '%6.3f'
-tout['Mag'].format = '%6.3f'
-tout['Mag Error'].format = '%6.4f'
-tout['Flux'].format = '%8.3f'
-tout['Flux Error'].format = '%6.2f'
+tout['mag'].format = '%6.3f'
+tout['mag_err'].format = '%6.4f'
+tout['flux(mJy)'].format = '%8.3f'
+tout['flux_err'].format = '%6.2f'
 tout['MJD'].format = '%12.6f'
 
 tout.write('tmp.txt', format='ascii',overwrite=True)
 
 tb = ascii.read('tmp.txt',format='basic',guess=False,	converters={
-	'JD': float,
-	'Flux': float,
-	'Flux Error': float,
-	'Mag': float,
-	'Mag Error': float,
-	'Limit': float,
+	'HJD': float,
+	'Camera': str,
 	'FWHM': float,
+	'Limit': float,
+	'mag': float,
+	'mag_err': float,
+	'flux(mJy)': float,
+	'flux_err': float,
 	'Filter': str,
-	'Quality':str,	
-	'Camera': str})
+	'npoints': int})
 
 tb.write(fout, format='ecsv', overwrite=True)
 #tb.write(sys.stdout, format='ecsv', overwrite=True)
